@@ -47,24 +47,20 @@ pub(crate) async fn execute() -> Result<()> {
             Arg::new("dir")
                 .long("dir")
                 .value_name("DIRECTORY")
-                .help("Grant access to the given host directory")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .help("Grant access to the given host directory"),
         )
         .arg(
             Arg::new("node")
                 .long("node")
                 .value_name("NODE_ADDRESS")
                 .help("Turns local process into a node and binds it to the provided address.")
-                .requires("control")
-                .takes_value(true),
+                .requires("control"),
         )
         .arg(
             Arg::new("control")
                 .long("control")
                 .value_name("CONTROL_ADDRESS")
                 .help("Address of a control node inside the cluster that will be used for bootstrapping.")
-                .takes_value(true)
         )
         .arg(
             Arg::new("control_server")
@@ -84,7 +80,6 @@ pub(crate) async fn execute() -> Result<()> {
                 .help("Certificate Authority public certificate used for bootstrapping QUIC connections.")
                 .requires("control")
                 .conflicts_with("test_ca")
-                .takes_value(true)
         )
         .arg(
             Arg::new("ca_key")
@@ -92,7 +87,6 @@ pub(crate) async fn execute() -> Result<()> {
                 .help("Certificate Authority private key used for signing node certificate requests")
                 .requires("control_server")
                 .conflicts_with("test_ca")
-                .takes_value(true)
         )
         .arg(
             Arg::new("tag")
@@ -124,7 +118,6 @@ pub(crate) async fn execute() -> Result<()> {
                 .help("Arguments passed to the guest")
                 .required(false)
                 .conflicts_with("no_entry")
-                .multiple_values(true)
                 .index(2),
         );
 
@@ -147,18 +140,18 @@ pub(crate) async fn execute() -> Result<()> {
 
     let args = command.get_matches();
 
-    if args.is_present("test_ca") {
+    if args.get_flag("test_ca") {
         log::warn!("Do not use test Certificate Authority in production!")
     }
 
     // Run control server
-    if args.is_present("control_server") {
-        if let Some(control_address) = args.value_of("control") {
+    if args.get_flag("control_server") {
+        if let Some(control_address) = args.get_one::<String>("control") {
             // TODO unwrap, better message
             let ca_cert = lunatic_distributed::control::server::root_cert(
-                args.is_present("test_ca"),
-                args.value_of("ca_cert"),
-                args.value_of("ca_key"),
+                args.get_flag("test_ca"),
+                args.get_one::<String>("ca_cert").map(|s| s.as_str()),
+                args.get_one::<String>("ca_key").map(|s| s.as_str()),
             )
             .unwrap();
             tokio::task::spawn(control_server(control_address.parse().unwrap(), ca_cert));
@@ -173,9 +166,10 @@ pub(crate) async fn execute() -> Result<()> {
     let env = envs.create(1);
 
     let (distributed_state, control_client, node_id) =
-        if let (Some(node_address), Some(control_address)) =
-            (args.value_of("node"), args.value_of("control"))
-        {
+        if let (Some(node_address), Some(control_address)) = (
+            args.get_one::<String>("node"),
+            args.get_one::<String>("control"),
+        ) {
             // TODO unwrap, better message
             let node_address = node_address.parse().unwrap();
             let node_name = Uuid::new_v4().to_string();
@@ -185,8 +179,8 @@ pub(crate) async fn execute() -> Result<()> {
                 .unwrap_or_default();
             let control_address = control_address.parse().unwrap();
             let ca_cert = lunatic_distributed::distributed::server::root_cert(
-                args.is_present("test_ca"),
-                args.value_of("ca_cert"),
+                args.get_flag("test_ca"),
+                args.get_one::<String>("ca_cert").map(|s| s.as_str()),
             )
             .unwrap();
             let node_cert =
@@ -235,9 +229,9 @@ pub(crate) async fn execute() -> Result<()> {
         };
 
     #[cfg(feature = "prometheus")]
-    if args.is_present("prometheus") {
+    if args.get_flag("prometheus") {
         let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
-        let builder = if let Some(addr) = args.value_of("prometheus_http") {
+        let builder = if let Some(addr) = args.get_one("prometheus_http") {
             builder.with_http_listener(addr.parse::<std::net::SocketAddr>().unwrap())
         } else {
             builder
@@ -258,20 +252,20 @@ pub(crate) async fn execute() -> Result<()> {
     config.set_can_create_configs(true);
     config.set_can_spawn_processes(true);
 
-    if !args.is_present("no_entry") {
+    if !args.get_flag("no_entry") {
         // Path to wasm file
-        let path = args.value_of("wasm").unwrap();
+        let path = args.get_one::<String>("wasm").unwrap();
         let path = Path::new(path);
 
         // Set correct command line arguments for the guest
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let mut wasi_args = vec![filename];
         let wasm_args = args
-            .values_of("wasm_args")
+            .get_many::<String>("wasm_args")
             .unwrap_or_default()
-            .map(|arg| arg.to_string());
+            .map(|s| s.to_string());
         wasi_args.extend(wasm_args);
-        if args.is_present("bench") {
+        if args.get_flag("bench") {
             wasi_args.push("--bench".to_owned());
         }
         config.set_command_line_arguments(wasi_args);
@@ -281,7 +275,7 @@ pub(crate) async fn execute() -> Result<()> {
 
         // Always preopen the current dir
         config.preopen_dir(".");
-        if let Some(dirs) = args.values_of("dir") {
+        if let Some(dirs) = args.get_many::<String>("dir") {
             for dir in dirs {
                 config.preopen_dir(dir);
             }

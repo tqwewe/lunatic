@@ -35,9 +35,7 @@ pub(crate) async fn test() -> Result<()> {
             Arg::new("dir")
                 .long("dir")
                 .value_name("DIRECTORY")
-                .help("Grant access to the given host directory")
-                .multiple_occurrences(true)
-                .takes_value(true),
+                .help("Grant access to the given host directory"),
         )
         .arg(
             Arg::new("ignored")
@@ -49,22 +47,19 @@ pub(crate) async fn test() -> Result<()> {
             Arg::new("nocapture")
                 .long("nocapture")
                 .help("Don't hide output from test executions")
-                .required(false)
-                .takes_value(false),
+                .required(false),
         )
         .arg(
             Arg::new("showoutput")
                 .long("show-output")
                 .help("Show also the output of successfull tests")
-                .required(false)
-                .takes_value(false),
+                .required(false),
         )
         .arg(
             Arg::new("list")
                 .long("list")
                 .help("List all tests")
                 .required(false)
-                .takes_value(false)
                 .requires("format"),
         )
         .arg(
@@ -73,22 +68,19 @@ pub(crate) async fn test() -> Result<()> {
                 .value_name("FORMAT")
                 .help("Configure formatting of output (only supported: terse)")
                 .required(false)
-                .takes_value(true)
                 .requires("list"),
         )
         .arg(
             Arg::new("exact")
                 .long("exact")
                 .help("Exactly match filters rather than by substring")
-                .required(false)
-                .takes_value(false),
+                .required(false),
         )
         .arg(
             Arg::new("wasm_args")
                 .value_name("WASM_ARGS")
                 .help("Arguments passed to the guest")
-                .required(false)
-                .multiple_values(true),
+                .required(false),
         )
         .get_matches();
 
@@ -100,7 +92,7 @@ pub(crate) async fn test() -> Result<()> {
 
     // Set correct command line arguments for the guest
     let wasi_args = args
-        .values_of("wasm_args")
+        .get_many::<String>("wasm_args")
         .unwrap_or_default()
         .map(|arg| arg.to_string())
         .collect();
@@ -111,7 +103,7 @@ pub(crate) async fn test() -> Result<()> {
 
     // Always preopen the current dir
     config.preopen_dir(".");
-    if let Some(dirs) = args.values_of("dir") {
+    if let Some(dirs) = args.get_many::<String>("dir") {
         for dir in dirs {
             config.preopen_dir(dir);
         }
@@ -122,13 +114,16 @@ pub(crate) async fn test() -> Result<()> {
     let runtime = runtimes::wasmtime::WasmtimeRuntime::new(&wasmtime_config)?;
 
     // Load and compile wasm module
-    let path = args.value_of("wasm").unwrap();
+    let path = args.get_one::<String>("wasm").unwrap();
     let path = Path::new(path);
     let module = fs::read(path)?;
     let module = Arc::new(runtime.compile_module::<DefaultProcessState>(module.into())?);
 
-    let filter = args.value_of("filter").unwrap_or_default();
-    let exact = args.is_present("exact");
+    let filter = args
+        .get_one::<String>("filter")
+        .cloned()
+        .unwrap_or_default();
+    let exact = args.get_flag("exact");
 
     // Find all function exports starting with `#lunatic_test_`.
     // Functions with a name that matches `#lunatic_test_#panic_Panic message#` are expected to
@@ -145,7 +140,7 @@ pub(crate) async fn test() -> Result<()> {
                     ignored = true;
                 }
                 // If --ignored flag is present, don't ignore test & filter out non-ignored ones
-                if args.is_present("ignored") {
+                if args.get_flag("ignored") {
                     if ignored {
                         ignored = false
                     } else {
@@ -178,9 +173,9 @@ pub(crate) async fn test() -> Result<()> {
                     let panic_prefix = format!("{}#", panic);
                     let function_name = name.strip_prefix(&panic_prefix).unwrap().to_string();
                     let filtered = if exact {
-                        !function_name.eq(filter)
+                        !function_name.eq(&filter)
                     } else {
-                        !function_name.contains(filter)
+                        !function_name.contains(&filter)
                     };
                     Test {
                         filtered,
@@ -191,9 +186,9 @@ pub(crate) async fn test() -> Result<()> {
                     }
                 } else {
                     let filtered = if exact {
-                        !name.eq(filter)
+                        !name.eq(&filter)
                     } else {
-                        !name.contains(filter)
+                        !name.contains(&filter)
                     };
                     Test {
                         filtered,
@@ -209,8 +204,8 @@ pub(crate) async fn test() -> Result<()> {
     }
 
     // If --list is specified, ignore everything else and just print out the test names
-    if args.is_present("list") {
-        let format = args.value_of("format").unwrap_or_default();
+    if args.get_flag("list") {
+        let format: String = args.get_one("format").cloned().unwrap_or_default();
         if format != "terse" {
             return Err(anyhow::anyhow!(
                 "error: argument for --format must be terse (was {})",
@@ -267,7 +262,7 @@ pub(crate) async fn test() -> Result<()> {
 
         // If --nocapture is not set, use in-memory stdout & stderr to hide output in case of
         // success
-        let no_capture = args.is_present("nocapture");
+        let no_capture = args.get_flag("nocapture");
         let stdout = StdoutCapture::new(no_capture);
         state.set_stdout(stdout.clone());
         state.set_stderr(stdout.clone());
@@ -418,7 +413,7 @@ pub(crate) async fn test() -> Result<()> {
     }
 
     // If --show-output is present, print success outputs if they are not empty
-    if args.is_present("showoutput") {
+    if args.get_flag("showoutput") {
         println!("\nsuccesses:");
         // Print stdout of successes
         for (success, stdout) in successes.iter() {
