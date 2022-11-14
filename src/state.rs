@@ -18,6 +18,10 @@ use lunatic_process::{
 use lunatic_process::{mailbox::MessageMailbox, message::Message};
 use lunatic_process_api::{ProcessConfigCtx, ProcessCtx};
 use lunatic_stdout_capture::StdoutCapture;
+use lunatic_thalo_api::{
+    events_scratch::EventsScratch, AggregateModuleCtx, AggregateModuleInstanceResources,
+    AggregateModuleResources,
+};
 use lunatic_timer_api::{TimerCtx, TimerResources};
 use lunatic_wasi_api::{build_wasi, LunaticWasiCtx};
 use tokio::net::{TcpListener, UdpSocket};
@@ -61,6 +65,10 @@ pub struct DefaultProcessState {
     initialized: bool,
     // Shared process registry
     registry: Arc<DashMap<String, (u64, u64)>>,
+    // Database pool
+    db_pool: Option<sqlx::PgPool>,
+    // Events scratch
+    events_scratch: Option<EventsScratch>,
 }
 
 impl DefaultProcessState {
@@ -95,6 +103,8 @@ impl DefaultProcessState {
             wasi_stderr: None,
             initialized: false,
             registry,
+            db_pool: None,
+            events_scratch: None,
         };
         Ok(state)
     }
@@ -131,6 +141,8 @@ impl ProcessState for DefaultProcessState {
             wasi_stderr: None,
             initialized: false,
             registry: self.registry.clone(),
+            db_pool: self.db_pool.clone(),
+            events_scratch: self.events_scratch.clone(),
         };
         Ok(state)
     }
@@ -161,6 +173,8 @@ impl ProcessState for DefaultProcessState {
             wasi_stdout: None,
             wasi_stderr: None,
             initialized: false,
+            db_pool: None,
+            events_scratch: None,
         }
     }
 
@@ -174,6 +188,7 @@ impl ProcessState for DefaultProcessState {
         lunatic_wasi_api::register(linker)?;
         lunatic_registry_api::register(linker)?;
         lunatic_distributed_api::register(linker)?;
+        lunatic_thalo_api::register(linker)?;
         Ok(())
     }
 
@@ -386,6 +401,8 @@ impl LunaticWasiCtx for DefaultProcessState {
 pub(crate) struct Resources {
     pub(crate) configs: HashMapId<DefaultProcessConfig>,
     pub(crate) modules: HashMapId<Arc<WasmtimeCompiledModule<DefaultProcessState>>>,
+    pub(crate) aggregate_modules: AggregateModuleResources,
+    pub(crate) aggregate_module_instances: AggregateModuleInstanceResources,
     pub(crate) timers: TimerResources,
     pub(crate) dns_iterators: HashMapId<DnsIterator>,
     pub(crate) tcp_listeners: HashMapId<TcpListener>,
@@ -456,8 +473,44 @@ impl DistributedCtx<LunaticEnvironment> for DefaultProcessState {
             wasi_stderr: None,
             initialized: false,
             registry: Default::default(), // TODO move registry into env?
+            db_pool: None,
+            events_scratch: None,
         };
         Ok(state)
+    }
+}
+
+impl AggregateModuleCtx for DefaultProcessState {
+    fn database_pool(&self) -> &Option<sqlx::PgPool> {
+        &self.db_pool
+    }
+
+    fn database_pool_mut(&mut self) -> &mut Option<sqlx::PgPool> {
+        &mut self.db_pool
+    }
+
+    fn aggregate_module_resources(&self) -> &AggregateModuleResources {
+        &self.resources.aggregate_modules
+    }
+
+    fn aggregate_module_resources_mut(&mut self) -> &mut AggregateModuleResources {
+        &mut self.resources.aggregate_modules
+    }
+
+    fn events_scratch(&self) -> &Option<EventsScratch> {
+        &self.events_scratch
+    }
+
+    fn events_scratch_mut(&mut self) -> &mut Option<EventsScratch> {
+        &mut self.events_scratch
+    }
+
+    fn aggregate_module_instance_resources(&self) -> &AggregateModuleInstanceResources {
+        &self.resources.aggregate_module_instances
+    }
+
+    fn aggregate_module_instance_resources_mut(&mut self) -> &mut AggregateModuleInstanceResources {
+        &mut self.resources.aggregate_module_instances
     }
 }
 

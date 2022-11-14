@@ -7,6 +7,7 @@ use std::{env, path::PathBuf};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("Hey!");
     // Detect if `cargo test` is running
     // https://internals.rust-lang.org/t/cargo-config-tom-different-runner-for-tests/16342/
     let cargo_test = match env::var("CARGO_MANIFEST_DIR") {

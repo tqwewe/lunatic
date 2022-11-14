@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env, fs, path::Path, sync::Arc};
 
 use anyhow::{anyhow, Context, Ok, Result};
-use clap::{crate_version, Arg, Command};
+use clap::{crate_version, Arg, ArgAction, Command};
 use tokio::sync::mpsc::channel;
 
 use lunatic_distributed::{
@@ -66,13 +66,15 @@ pub(crate) async fn execute() -> Result<()> {
             Arg::new("control_server")
                 .long("control-server")
                 .help("When set run the control server")
-                .requires("control"),
+                .requires("control")
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("test_ca")
                 .long("test-ca")
                 .help("Use test Certificate Authority for bootstrapping QUIC connections.")
                 .requires("control")
+                .action(ArgAction::SetTrue)
         )
         .arg(
             Arg::new("ca_cert")
@@ -99,11 +101,13 @@ pub(crate) async fn execute() -> Result<()> {
             Arg::new("no_entry")
                 .long("no-entry")
                 .help("If provided will join other nodes, but not require a .wasm entry file")
+                .action(ArgAction::SetTrue)
                 .required_unless_present("wasm")
         ).arg(
             Arg::new("bench")
                 .long("bench")
-                .help("Indicate that a benchmark is running"),
+                .help("Indicate that a benchmark is running")
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("wasm")
@@ -126,7 +130,8 @@ pub(crate) async fn execute() -> Result<()> {
         .arg(
             Arg::new("prometheus")
                 .long("prometheus")
-                .help("whether to enable the prometheus metrics exporter"),
+                .help("whether to enable the prometheus metrics exporter")
+                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("prometheus_http")
@@ -159,7 +164,8 @@ pub(crate) async fn execute() -> Result<()> {
     }
 
     // Create wasmtime runtime
-    let wasmtime_config = runtimes::wasmtime::default_config();
+    let mut wasmtime_config = runtimes::wasmtime::default_config();
+    wasmtime_config.wasm_component_model(true);
     let runtime = runtimes::wasmtime::WasmtimeRuntime::new(&wasmtime_config)?;
     let envs = Arc::new(LunaticEnvironments::default());
 
