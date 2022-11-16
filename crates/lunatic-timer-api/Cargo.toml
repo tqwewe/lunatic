@@ -1,12 +1,11 @@
 [package]
 name = "lunatic-timer-api"
-version = "0.10.0"
+version = "0.12.0"
 edition = "2021"
 description = "Lunatic host functions for working with timers."
 homepage = "https://lunatic.solutions"
 repository = "https://github.com/lunatic-solutions/lunatic/tree/main/crates/lunatic-timer-api"
 license = "Apache-2.0/MIT"
-
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,11 +13,11 @@ license = "Apache-2.0/MIT"
 metrics = ["dep:metrics"]
 
 [dependencies]
-anyhow = "^1.0"
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }
+anyhow = "1.0"
+hash-map-id = { version = "0.12", path = "../hash-map-id" }
+lunatic-common-api = { version = "0.12", path = "../lunatic-common-api" }
+lunatic-process = { version = "0.12", path = "../lunatic-process" }
+lunatic-process-api = { version = "0.12", path = "../lunatic-process-api" }
 metrics = { version = "0.20.1", optional = true }
-tokio = { version = "^1.20", features = ["rt", "time"] }
-hash-map-id = { version = "^0.10", path = "../hash-map-id" }
-lunatic-process = { version = "^0.10", path = "../lunatic-process" }
-lunatic-process-api = { version = "^0.10", path = "../lunatic-process-api" }
-lunatic-common-api = { version = "^0.10", path = "../lunatic-common-api" }
+tokio = { version = "1.20", features = ["rt", "time"] }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }

@@ -5,14 +5,17 @@ homepage = "https://lunatic.solutions"
 license = "Apache-2.0/MIT"
 name = "lunatic-networking-api"
 repository = "https://github.com/lunatic-solutions/lunatic/tree/main/crates/lunatic-networking-api"
-version = "0.10.0"
+version = "0.12.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "^1.0"
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" } # managed by root Cargo.toml
-tokio = { version = "^1.20", features = [
+anyhow = "1.0"
+hash-map-id = { version = "0.12", path = "../hash-map-id" }
+lunatic-common-api = { version = "0.12", path = "../lunatic-common-api" }
+lunatic-error-api = { version = "0.12", path = "../lunatic-error-api" }
+rustls-pemfile = { version = "1.0" }
+tokio = { version = "1.20", features = [
   "macros",
   "rt-multi-thread",
   "sync",
@@ -20,9 +23,6 @@ tokio = { version = "^1.20", features = [
   "time",
   "io-util",
 ] }
-hash-map-id = { version = "^0.10", path = "../hash-map-id" }
-lunatic-common-api = { version = "^0.10", path = "../lunatic-common-api" }
-lunatic-error-api = { version = "^0.10", path = "../lunatic-error-api" }
-rustls-pemfile = { version = "^1.0" }
 tokio-rustls = "0.23.4"
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" } # managed by root Cargo.toml
 webpki-roots = "0.22.0"
