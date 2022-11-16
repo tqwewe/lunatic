@@ -7,29 +7,24 @@ homepage = "https://lunatic.solutions"
 repository = "https://github.com/lunatic-solutions/lunatic/tree/main/crates/lunatic-common-api"
 license = "Apache-2.0/MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-anyhow = "1.0"
+hash-map-id = { workspace = true }
+lunatic-common-api = { workspace = true }
+lunatic-process = { workspace = true }
+lunatic-process-api = { workspace = true }
+
+anyhow = { workspace = true }
 bincode = "1.3"
 derive_more = "0.99"
-hash-map-id = { version = "0.12", path = "../hash-map-id" }
-lunatic-common-api = { version = "0.12", path = "../lunatic-common-api" }
-lunatic-process = { version = "0.12", path = "../lunatic-process" }
-lunatic-process-api = { version = "0.12", path = "../lunatic-process-api" }
 once_cell = "1.16"
 regex = "1.7.0"
 semver = { version = "1.0.14", features = ["serde"] }
-serde = { version = "1.0.147", features = ["derive"] }
-serde_json = "1.0.87"
-sqlx = { version = "0.6.2", features = [
+serde = { workspace = true, features = ["derive"] }
+sqlx = { workspace = true, features = [
   "runtime-tokio-rustls",
   "postgres",
   "macros",
 ] }
-tokio = { version = "1.21.2", features = ["sync"] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", features = [
-  "component-model",
-] }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen" } # managed by root Cargo.toml
+tokio = { workspace = true, features = ["sync"] }
+wasmtime = { workspace = true, features = ["component-model"] }
+wit-bindgen-host-wasmtime-rust = { git = "https://github.com/bytecodealliance/wit-bindgen" }
