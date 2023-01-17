@@ -146,12 +146,8 @@ impl Aggregate {
                 self.init,
             )
         };
-        println!("initializing with ID: {arg0}");
         let (ret0,) = callee.call_async(store.as_context_mut(), (arg0,)).await?;
-        println!("DONE initializing with ID: {arg0}");
-        println!("post return async");
         callee.post_return_async(store.as_context_mut()).await?;
-        println!("DONE post return async");
         Ok(ret0)
     }
     pub async fn apply<S: wasmtime::AsContextMut>(

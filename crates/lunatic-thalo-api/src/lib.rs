@@ -38,7 +38,7 @@ pub fn register<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send + Sy
     linker.func_wrap2_async("lunatic::thalo", "connect_db", connect_db)?;
     linker.func_wrap3_async("lunatic::thalo", "load_module", load_module)?;
     linker.func_wrap5_async("lunatic::thalo", "init_module", init_module)?;
-    linker.func_wrap5_async("lunatic::thalo", "execute_command", execute_command)?;
+    linker.func_wrap6_async("lunatic::thalo", "execute_command", execute_command)?;
     linker.func_wrap3_async("lunatic::thalo", "load_events", load_events)?;
     linker.func_wrap("lunatic::thalo", "read_events_data", read_events_data)?;
     linker.func_wrap2_async("lunatic::thalo", "stream_version", stream_version)?;
@@ -143,7 +143,6 @@ fn init_module<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send + Syn
                 return Ok(-1);
             }
         };
-        println!("DONE initializing");
 
         // Stream
         let stream_bytes = memory
@@ -152,7 +151,6 @@ fn init_module<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send + Syn
             .or_trap("lunatic::thalo::init_module")?;
         let stream =
             String::from_utf8(stream_bytes.to_vec()).or_trap("lunatic::thalo::init_module")?;
-        println!("DONE reading stream name from meory");
 
         let mut conn = caller
             .data()
@@ -162,7 +160,6 @@ fn init_module<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send + Syn
             .acquire()
             .await
             .or_trap("lunatic::thalo::init_module")?;
-        println!("DONE aquiring db connection");
 
         #[derive(Serialize, Deserialize)]
         struct Event {
@@ -180,7 +177,6 @@ fn init_module<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send + Syn
         .fetch_all(&mut conn)
         .await
         .or_trap("lunatic::thalo::init_module")?;
-        println!("DONE loading events from DB");
 
         let event_refs: Vec<_> = events
             .iter()
@@ -190,11 +186,10 @@ fn init_module<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send + Syn
             })
             .collect();
 
-        instance
-            .apply(&event_refs)
-            .await
-            .or_trap("lunatic::thalo::init_module")?;
-        println!("DONE applying events from DB");
+        // instance
+        //     .apply(&event_refs)
+        //     .await
+        //     .or_trap("lunatic::thalo::init_module")?;
 
         // Insert resource and return ID
         let index = caller
@@ -214,6 +209,7 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
     payload_ptr: u32,
     payload_len: u32,
     instance: u64,
+    version: i64,
 ) -> Box<dyn Future<Output = Result<i64>> + Send + '_> {
     Box::new(async move {
         let memory = get_memory(&mut caller)?;
@@ -225,7 +221,6 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
             .or_trap("lunatic::thalo::execute_command")?;
         let command =
             String::from_utf8(command_bytes.to_vec()).or_trap("lunatic::thalo::execute_command")?;
-        println!("DONE reading command from meory");
 
         // Payload
         let payload = memory
@@ -233,7 +228,6 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
             .get(payload_ptr as usize..(payload_ptr as usize + payload_len as usize))
             .or_trap("lunatic::thalo::execute_command")?
             .to_vec();
-        println!("DONE reading payload from meory");
 
         // Instance
         let (stream, instance) = caller
@@ -242,7 +236,6 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
             .get_mut(instance)
             .or_trap("lunatic::thalo::execute_command")?;
         let stream = stream.clone();
-        println!("DONE reading stream and instance from id");
 
         let result = instance
             .handle_and_apply(&command, &payload)
@@ -260,14 +253,8 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
                 return Ok(-1);
             }
         };
-        println!("DONE handling and applying command");
-
-        println!("FUEL COSNUMED: {}", instance.fuel_consumed().await);
 
         let events_count = events.len();
-        if events_count == 0 {
-            return Ok(0);
-        }
 
         let mut conn = caller
             .data()
@@ -277,17 +264,23 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
             .acquire()
             .await
             .or_trap("lunatic::thalo::execute_command")?;
-        println!("DONE aquiring db connection");
 
-        let version = sqlx::query_scalar!(
-            "SELECT MAX(version) as version FROM event WHERE stream = $1",
-            &&*stream
-        )
-        .fetch_one(&mut conn)
-        .await
-        .or_trap("lunatic::thalo::execute_command")?
-        .unwrap_or(-1);
-        println!("DONE fetching latest version from db");
+        let version = if version == -1 {
+            sqlx::query_scalar!(
+                "SELECT MAX(version) as version FROM event WHERE stream = $1",
+                &&*stream
+            )
+            .fetch_one(&mut conn)
+            .await
+            .or_trap("lunatic::thalo::execute_command")?
+            .unwrap_or(-1)
+        } else {
+            version
+        };
+
+        if events_count == 0 {
+            return Ok(version);
+        }
 
         let mut query = "INSERT INTO event (
             stream,
@@ -307,30 +300,26 @@ fn execute_command<T: ProcessState + ProcessCtx<T> + AggregateModuleCtx + Send +
             )?;
         }
 
-        let query = events
-            .into_iter()
-            .fold(
-                (sqlx::query(&query), version),
-                |(query, mut version), event| {
-                    version += 1;
-                    (
-                        query
-                            .bind(&stream)
-                            .bind(version)
-                            .bind(event.event_type)
-                            .bind(event.payload),
-                        version,
-                    )
-                },
-            )
-            .0;
+        let (query, version) = events.into_iter().fold(
+            (sqlx::query(&query), version),
+            |(query, mut version), event| {
+                version += 1;
+                (
+                    query
+                        .bind(&stream)
+                        .bind(version)
+                        .bind(event.event_type)
+                        .bind(event.payload),
+                    version,
+                )
+            },
+        );
         query
             .execute(&mut conn)
             .await
             .or_trap("lunatic::thalo::execute_command")?;
-        println!("DONE saving new events into database");
 
-        Ok(events_count as i64)
+        Ok(version)
     })
 }
 

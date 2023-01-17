@@ -2,6 +2,7 @@ use std::{borrow, fmt, ops::DerefMut, path::Path, str, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use derive_more::{Deref, DerefMut};
+use lunatic_process::config::UNIT_OF_COMPUTE_IN_INSTRUCTIONS;
 use once_cell::sync::OnceCell;
 use regex::Regex;
 use semver::Version;
@@ -116,7 +117,8 @@ impl fmt::Display for ModuleName {
 impl Module {
     pub async fn from_file(engine: Engine, fuel: u64, file: impl AsRef<Path>) -> Result<Self> {
         let mut store = Store::new(&engine, ());
-        store.add_fuel(fuel)?;
+        store.out_of_fuel_trap();
+        store.out_of_fuel_async_yield(fuel, UNIT_OF_COMPUTE_IN_INSTRUCTIONS);
         let component = Component::from_file(&engine, file).unwrap();
         let linker = Linker::new(&engine);
 
